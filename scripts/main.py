@@ -1,4 +1,5 @@
 # %% Imports
+
 import numpy as np
 import pandas as pd
 import os
@@ -6,7 +7,6 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from statsmodels.sandbox.stats.runs import runstest_1samp
 import statsmodels.tsa.stattools as ts
-
 
 # %% Setting working directory and creating directories
 script_path = os.path.abspath(__file__)
@@ -29,6 +29,12 @@ missing_indexes = np.setdiff1d(all_indexes, df['Index'])
 print("Brakujące indeksy:")
 print(missing_indexes)
 
+# %% Filling missing values
+missing_indexes_df = pd.DataFrame({'Index': missing_indexes})
+df = pd.concat([df, missing_indexes_df], ignore_index=True)
+df = df.sort_values(by='Index')
+df['RR Interval'].interpolate(method="linear", inplace=True)
+
 # %% Visualise RR Intervals
 plt.plot(df['Index'], df['RR Interval'])
 plt.show()
@@ -40,46 +46,49 @@ stats = [np.mean(RR), np.std(RR), np.min(RR), np.max(RR), np.quantile(RR, 0.25),
 print(stats)
 
 # %% Tests
-
 runstest_1samp(RR, cutoff="median")
 ts.adfuller(RR)
 
-# %% (B) Differentiation
+# %% (C) Windows
 
-# Create a DataFrame from your data
-data = {'Time Between Heart Beats': [712, 696, 680, 728, 728, 728, 728, 728, 656, 656, 640, 632, 624, 624],
-        'Indexes': []}
-dft = pd.DataFrame(data)
+from itertools import islice
 
-# Define the range of missing indexes
-missing_index_range = range(100194, 100204)  # Adjust as needed
-
-# Create a new DataFrame with the desired index range
-missing_indexes_df = pd.DataFrame({'Indexes': missing_index_range})
-
-# Merge the original DataFrame with the one containing missing indexes
-merged_df = pd.concat([dft, missing_indexes_df], ignore_index=True)
-
-# Sort the DataFrame by 'Indexes' if needed
-merged_df = merged_df.sort_values(by='Indexes')
-
-print(merged_df)
+def chunk(lst, n):
+    it = iter(lst)
+    return iter(lambda: tuple(islice(it, n)), ())
 
 
-# %% pchip, slinear, linear
+chunks = [batch for batch in list(chunk(RR, 20)) if len(batch) == 20]
+
+
+#%%
+from time import time
+from arch.unitroot import ADF
+
+start = time()
+for chunk in chunks:
+    chunk = pd.Series(chunk)
+    max_lags = int(np.sqrt(chunk.shape[0]))
+    print(ADF(chunk, trend="n", max_lags=max_lags))
+stop = time()
+
+print(stop-start)
+
+#%%
 
 import pandas as pd
+import numpy as np
 
-# Create a DataFrame with your data, including NaN values
-data = {'Time Between Heart Beats': [712.0, 696.0, 680.0, 728.0, None, 728.0, 728.0, 728.0, None, None, None, None, None, None, None, None, None, None, None, 656.0, 656.0, 640.0, 632.0, 624.0, 624.0],
-        'Indexes': [100186, 100187, 100188, 100189, 100190, 100191, 100192, 100193, 100194, 100195, 100196, 100197, 100198, 100199, 100200, 100201, 100202, 100203, 100204, 100204, 100205, 100206, 100207, 100208, 100209]}
+y = [3126.0, 3321.0, 3514.0, 3690.0, 3906.0, 4065.0, 4287.0, 
+     4409.0, 4641.0, 4812.0, 4901.0, 5028.0, 5035.0, 5083.0,
+     5183.0, 5377.0, 5428.0, 5601.0, 5705.0, 5895.0, 6234.0,
+     6542.0, 6839.0]
+y = pd.Series(y)
 
-df = pd.DataFrame(data)
+max_lags = int(np.sqrt(y.shape[0]))
+ADF(y, trend="ct", max_lags=max_lags).summary()
 
-# Use linear interpolation to fill NaN values
-df['Time Between Heart Beats'].interpolate(method="linear", inplace=True)
 
-# Display the updated DataFrame
-print(df)
+
 
 
