@@ -4,9 +4,13 @@ import numpy as np
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
-import statsmodels.api as sm
+# import statsmodels.api as sm
 from statsmodels.sandbox.stats.runs import runstest_1samp
 import statsmodels.tsa.stattools as ts
+from itertools import islice
+from time import time
+from arch.unitroot import ADF
+from itertools import product
 
 # %% Setting working directory and creating directories
 script_path = os.path.abspath(__file__)
@@ -33,7 +37,7 @@ print(missing_indexes)
 missing_indexes_df = pd.DataFrame({'Index': missing_indexes})
 df = pd.concat([df, missing_indexes_df], ignore_index=True)
 df = df.sort_values(by='Index')
-df['RR Interval'].interpolate(method="linear", inplace=True)
+#df['RR Interval'].interpolate(method="linear", inplace=True)
 
 # %% Visualise RR Intervals
 plt.plot(df['Index'], df['RR Interval'])
@@ -51,8 +55,6 @@ ts.adfuller(RR)
 
 # %% (C) Windows
 
-from itertools import islice
-
 def chunk(lst, n):
     it = iter(lst)
     return iter(lambda: tuple(islice(it, n)), ())
@@ -61,34 +63,54 @@ def chunk(lst, n):
 chunks = [batch for batch in list(chunk(RR, 20)) if len(batch) == 20]
 
 
-#%%
-from time import time
-from arch.unitroot import ADF
+#%% (C)
 
 start = time()
 for chunk in chunks:
     chunk = pd.Series(chunk)
     max_lags = int(np.sqrt(chunk.shape[0]))
-    print(ADF(chunk, trend="n", max_lags=max_lags))
+    ADF(chunk, trend="n", max_lags=max_lags)
+    
 stop = time()
+
+means_of_windows = [np.mean(chunk) for chunk in chunks]
+
+mean_RR = np.mean(means_of_windows)
+min_RR = np.min(means_of_windows)
+max_RR = np.max(means_of_windows)
+var_RR = np.std(means_of_windows)
+
 
 print(stop-start)
 
-#%%
+# %% (B)
 
-import pandas as pd
-import numpy as np
+#plt.plot(ts_diff)
+#plt.show()
 
-y = [3126.0, 3321.0, 3514.0, 3690.0, 3906.0, 4065.0, 4287.0, 
-     4409.0, 4641.0, 4812.0, 4901.0, 5028.0, 5035.0, 5083.0,
-     5183.0, 5377.0, 5428.0, 5601.0, 5705.0, 5895.0, 6234.0,
-     6542.0, 6839.0]
-y = pd.Series(y)
+delta_RR = RR.diff().dropna()
 
-max_lags = int(np.sqrt(y.shape[0]))
-ADF(y, trend="ct", max_lags=max_lags).summary()
+series_sumbolization = np.zeros(len(delta_RR), dtype=object)
 
+for i, diff in enumerate(delta_RR):
+    if 0 < diff < 40:
+        series_sumbolization[i] = "a"
+    elif -40 < diff < 0:
+        series_sumbolization[i] = "d"
+    elif 40 <= diff:
+        series_sumbolization[i] = "A"
+    elif diff <= -40:
+        series_sumbolization[i] = "D"
+    else:
+        series_sumbolization[i] = "z"
+    
+pairs_in_series_symbolization = [series_sumbolization[i] + series_sumbolization[i + 1] for i in range(len(series_sumbolization) - 1)]
 
+original_list = ["z", "a", "A", "d", "D"]
+
+combinations_list = ["".join(pair) for pair in product(original_list, repeat=2)]
+
+print(combinations_list)
 
 
 
