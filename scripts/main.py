@@ -1,19 +1,18 @@
 # %% Imports
 import os
+
 script_path = os.path.abspath(__file__)
-os.chdir(os.path.dirname(os.path.dirname(script_path))) #setting working directory
+os.chdir(os.path.dirname(script_path))  # setting working directory for modules import
+
+# My modules
+from functions import read_file, statistics, windows_statistics, rr_intervals_events, plot, hist, bar_plot, \
+    stacked_plot, stacked_hist, merge_files
+
+os.chdir(os.path.dirname(os.path.dirname(script_path)))
 
 # Standard packages
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from statsmodels.sandbox.stats.runs import runstest_1samp
-from arch.unitroot import ADF
-from itertools import product
-
-# My modules
-from bubbleChart import BubbleChart
-from functions import interpret_ADF, interpret_WW, chunk_list, statistics, generate_random_color
 
 # %% Setting working directory and creating directories
 
@@ -21,153 +20,188 @@ data_dir = os.path.join(os.getcwd(), "data")
 os.makedirs(data_dir, exist_ok=True)
 patients_dir = os.path.join(os.getcwd(), "patients")
 os.makedirs(patients_dir, exist_ok=True)
+os.makedirs(os.path.join(patients_dir, "Group Statistics"), exist_ok=True)
 
 files_list = os.listdir(data_dir)
 
 for file in files_list:
     file_name, file_extension = os.path.splitext(file)
-    os.makedirs(os.path.join(patients_dir, ), exist_ok=True)
+    os.makedirs(os.path.join(patients_dir, file_name, "plots"), exist_ok=True)
+    os.makedirs(os.path.join(patients_dir, file_name, "results"), exist_ok=True)
 
-# %% Loading files
+# %% (A)
 
-df = pd.read_csv(os.path.join(data_dir, files_list[0]), sep='\t', names=['RR Interval', 'Index'])
+for file in files_list:
+    file_name, file_extension = os.path.splitext(file)
 
+    df = read_file(data_dir, file)
+    RR = df['RR Interval']
+    idx = df['Index']
 
-# %% (A) Completeness of the series
-all_indexes = np.arange(df['Index'][0], df['Index'][len(df['Index']) - 1] + 1)
-missing_indexes = np.setdiff1d(all_indexes, df['Index'])
+    columns = ['śr', 'var', 'min', 'max', 'ww p-val', 'ww', 'adf p-val', 'adf', 'braki']
+    data = np.array([statistics(RR) + ['{}/{}'.format(sum(RR.isna()), len(RR))]])
 
+    df_A = pd.DataFrame(data, columns=columns)
+    df_A.to_csv(os.path.join(patients_dir, file_name, "results", "A.txt"), sep='\t', index=False)
 
-# %% Filling missing values
-missing_indexes_df = pd.DataFrame({'Index': missing_indexes})
-df = pd.concat([df, missing_indexes_df], ignore_index=True)
-df = df.sort_values(by='Index')
-# df['RR Interval'].interpolate(method="linear", inplace=True)
-
-# %% Visualise RR Intervals
-
-fig, ax = plt.subplots()
-fig.set_size_inches(45, 10)
-ax.plot(df['Index'], df['RR Interval'])
-ax.set_title('RR Intervals - {}'.format(files_list[0]))
-ax.set_ylabel('RR Interval [ms]')
-ax.set_xlabel('Index')
-plt.savefig(os.path.join(plots_dir, 'RR Intervals Plot.pdf'.format(files_list[0])))
-plt.show()
-
-def plot(x, y, file_name, title, xlabel=None, ylabel=None):
-    fig, ax = plt.subplots()
-    fig.set_size_inches(45, 10)
-    ax.plot(x, y)
-    ax.set_title(title)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    plt.savefig(os.path.join(plots_dir, 'RR Intervals Plot.pdf'.format(file_name)))
-    plt.show()
-
-
-# %% Statistics
-
-RR = df['RR Interval']
-print(statistics(RR))
-
+    plot(idx, RR, file_name, patients_dir, "Time Series")
+    hist(RR, file_name, patients_dir, "Histogram RR")
 
 # %% (B)
 
-RR = df['RR Interval']
+for file in files_list:
+    file_name, file_extension = os.path.splitext(file)
 
-for k in range(1, 21):
-    print(statistics(RR.diff(k)))
+    df = read_file(data_dir, file)
+    RR = df['RR Interval']
 
+    columns = ['k', 'śr', 'var', 'min', 'max', 'ww p-val', 'ww', 'adf p-val', 'adf']
+    results_B = []
 
-# %% (C) Windows
+    for k in range(1, 21):
+        results_B.append([k] + statistics(RR.diff(k)))
 
-for k in range(20, 201, 10):
-    chunks = [batch for batch in list(chunk_list(RR.dropna(), k)) if len(batch) == k]
-    
-    WW_results = []
-    ADF_results = []
-    
-    for chunk in chunks:
-        chunk_ts = pd.Series(chunk)
-        max_lags = int(np.sqrt(chunk_ts.shape[0]))
-        ADF_pvalue = ADF(chunk_ts, trend="c", max_lags=max_lags).pvalue
-        ADF_results.append(interpret_ADF(ADF_pvalue))
-        WW_pvalue = runstest_1samp(chunk_ts.dropna(), cutoff="median")[1]
-        WW_results.append(interpret_WW(WW_pvalue))
-        
-    means_of_windows = np.array([np.mean(chunk) for chunk in chunks])
-    
-    mean_RR = np.nanmean(means_of_windows)
-    min_RR = np.nanmin(means_of_windows)
-    max_RR = np.nanmax(means_of_windows)
-    var_RR = np.nanstd(means_of_windows)
-    random_sequences = WW_results.count("sekwencja losowa") / len(WW_results)
-    nonstationary_serieses = ADF_results.count("szereg niestacjonarny") / len(ADF_results)
-    stats = [
-        k, 
-        round(mean_RR,2), 
-        round(min_RR,2), 
-        round(max_RR,2), 
-        round(var_RR,3), 
-        round(random_sequences,3), 
-        round(nonstationary_serieses,3)
-    ]
-    print(stats)
+    df_B = pd.DataFrame(np.array(results_B), columns=columns)
+    df_B.to_csv(os.path.join(patients_dir, file_name, "results", "B.txt"), sep='\t', index=False)
 
+    stacked_plot(RR, file_name, patients_dir)
+    stacked_hist(RR, file_name, patients_dir)
+
+# %% (C)
+
+for file in files_list:
+    file_name, file_extension = os.path.splitext(file)
+
+    df = read_file(data_dir, file)
+    RR = df['RR Interval']
+
+    columns = ['okno', 'śr', 'var', 'min', 'max', '% niezal', '% niestac']
+    results_C = []
+
+    for k in range(20, 201, 10):
+        results_C.append(windows_statistics(RR, k))
+
+    df_C = pd.DataFrame(np.array(results_C), columns=columns)
+    df_C.to_csv(os.path.join(patients_dir, file_name, "results", "C.txt"), sep='\t', index=False)
 
 # %% (D)
 
-delta_RR = RR.diff().dropna()
-series_symbolization = list(np.zeros(len(delta_RR), dtype=object))
+for file in files_list:
+    file_name, file_extension = os.path.splitext(file)
 
-for i, diff in enumerate(delta_RR):
-    if 0 < diff < 40:
-        series_symbolization[i] = "d"
-    elif -40 < diff < 0:
-        series_symbolization[i] = "a"
-    elif 40 <= diff:
-        series_symbolization[i] = "D"
-    elif diff <= -40:
-        series_symbolization[i] = "A"
+    df = read_file(data_dir, file)
+    RR = df['RR Interval']
+
+    results = rr_intervals_events(RR)
+    events = results[0] + results[2] + results[4]
+    no_events = results[1] + results[3] + results[5]
+
+    columns = ['event', 'occurrences']
+    results_D = [[events[i], no_events[i]] for i in range(len(events))]
+
+    df_D = pd.DataFrame(np.array(results_D), columns=columns)
+    df_D.to_csv(os.path.join(patients_dir, file_name, "results", "D.txt"), sep='\t', index=False)
+
+    bar_plot(results[0], results[1], file_name, patients_dir, "Single")
+    bar_plot(results[2], results[3], file_name, patients_dir, "Double", hight=6, length=10, n=25)
+    bar_plot(results[4], results[5], file_name, patients_dir, "Tripple", hight=6, length=12, n=25)
+
+# %%
+
+men = []
+women = []
+
+for file in files_list:
+    file_name, file_extension = os.path.splitext(file)
+
+    if file_name[0] == "f":
+        women.append(file_name)
     else:
-        series_symbolization[i] = "z"
+        men.append(file_name)
 
-pairs_in_series_symbolization = [series_symbolization[i] + series_symbolization[i + 1] for i in
-                                 range(len(series_symbolization) - 1)]
-tripples_in_series_symbolization = [series_symbolization[i] + series_symbolization[i + 1] + series_symbolization[i+2] for i in
-                                 range(len(series_symbolization) - 2)]
+# %% Group (A)
+men_file_paths = [os.path.join(patients_dir, file, "results", "A.txt") for file in men]
+women_file_paths = [os.path.join(patients_dir, file, "results", "A.txt") for file in women]
+selected_columns = ['śr', 'var', 'min', 'max', 'ww', 'adf']
 
-single_events = ["z", "a", "A", "d", "D"]
-double_events = ["".join(pair) for pair in product(single_events, repeat=2)]
-tripple_events = ["".join(pair) for pair in product(single_events, repeat=3)]
+men_df_A = merge_files(men_file_paths, selected_columns)
+women_df_A = merge_files(women_file_paths, selected_columns)
 
-single_events_occurrences = [series_symbolization.count(event) for event in single_events]
-double_events_occurrences = [pairs_in_series_symbolization.count(event) for event in double_events]
-tripple_events_occurrences = [tripples_in_series_symbolization.count(event) for event in tripple_events]
+men_df_A.columns = men_df_A.columns.str.replace("ww", "% niezal")
+men_df_A.columns = men_df_A.columns.str.replace("adf", "% niestac")
+women_df_A.columns = women_df_A.columns.str.replace("ww", "% niezal")
+women_df_A.columns = women_df_A.columns.str.replace("adf", "% niestac")
 
+men_df_A.to_csv(os.path.join(patients_dir, "Group Statistics", "A_males.txt"), index=False, sep='\t')
+women_df_A.to_csv(os.path.join(patients_dir, "Group Statistics", "A_females.txt"), index=False, sep='\t')
 
-#%% Bubble chart
+# %% Group (B)
+men_file_paths = [os.path.join(patients_dir, file, "results", "B.txt") for file in men]
+women_file_paths = [os.path.join(patients_dir, file, "results", "B.txt") for file in women]
+selected_columns = ['k', 'śr', 'var', 'min', 'max', 'ww', 'adf']
 
-color_list = [generate_random_color() for _ in range(125)]
+men_df_B = merge_files(men_file_paths, selected_columns)
+women_df_B = merge_files(women_file_paths, selected_columns)
 
-browser_market_share = {
-    'browsers': tripple_events,
-    'market_share': tripple_events_occurrences,
-    'color': color_list
-}
+men_df_B.columns = men_df_B.columns.str.replace("ww", "% niezal")
+men_df_B.columns = men_df_B.columns.str.replace("adf", "% niestac")
+women_df_B.columns = women_df_B.columns.str.replace("ww", "% niezal")
+women_df_B.columns = women_df_B.columns.str.replace("adf", "% niestac")
 
-bubble_chart = BubbleChart(area=browser_market_share['market_share'],
-                           bubble_spacing=0.1)
+men_df_B.to_csv(os.path.join(patients_dir, "Group Statistics", "B_males.txt"), index=False, sep='\t')
+women_df_B.to_csv(os.path.join(patients_dir, "Group Statistics", "B_females.txt"), index=False, sep='\t')
 
-bubble_chart.collapse()
+# %% Group (C)
+men_file_paths = [os.path.join(patients_dir, file, "results", "C.txt") for file in men]
+women_file_paths = [os.path.join(patients_dir, file, "results", "C.txt") for file in women]
+selected_columns = ['okno', 'śr', 'var', 'min', 'max', '% niezal', '% niestac']
 
-fig, ax = plt.subplots(subplot_kw=dict(aspect="equal"))
-bubble_chart.plot(
-    ax, browser_market_share['browsers'], browser_market_share['color'])
-ax.axis("off")
-ax.relim()
-ax.autoscale_view()
-ax.set_title('Browser market share')
+men_df_C = merge_files(men_file_paths, selected_columns)
+women_df_C = merge_files(women_file_paths, selected_columns)
 
-plt.show()
+men_df_C.to_csv(os.path.join(patients_dir, "Group Statistics", "C_males.txt"), index=False, sep='\t')
+women_df_C.to_csv(os.path.join(patients_dir, "Group Statistics", "C_females.txt"), index=False, sep='\t')
+
+# %% Group (D)
+
+men_file_paths = [os.path.join(patients_dir, file, "results", "D.txt") for file in men]
+women_file_paths = [os.path.join(patients_dir, file, "results", "D.txt") for file in women]
+selected_columns = ['occurrences']
+
+events = pd.read_csv(men_file_paths[0], sep='\t', usecols=['event'])
+
+men_df_D = merge_files(men_file_paths, selected_columns)
+women_df_D = merge_files(women_file_paths, selected_columns)
+
+columns = ['event', 'occurrences']
+
+data_m = {'event': np.array(events['event']), 'occurences': np.array(men_df_D['occurrences'])}
+data_w = {'event': np.array(events['event']), 'occurences': np.array(women_df_D['occurrences'])}
+
+men_df_D = pd.DataFrame(data_m)
+women_df_D = pd.DataFrame(data_w)
+
+men_df_D.to_csv(os.path.join(patients_dir, "Group Statistics", "D_males.txt"), index=False, sep='\t')
+women_df_D.to_csv(os.path.join(patients_dir, "Group Statistics", "D_females.txt"), index=False, sep='\t')
+
+r0 = men_df_D.iloc[:5, 0].tolist()
+r1 = men_df_D.iloc[:5, 1].tolist()
+r2 = men_df_D.iloc[5:30, 0].tolist()
+r3 = men_df_D.iloc[5:30, 1].tolist()
+r4 = men_df_D.iloc[30:155, 0].tolist()
+r5 = men_df_D.iloc[30:155, 1].tolist()
+
+bar_plot(r0, r1, "Males", patients_dir, "Single", d=True)
+bar_plot(r2, r3, "Males", patients_dir, "Double", hight=6, length=10, n=25, d=True)
+bar_plot(r4, r5, "Males", patients_dir, "Tripple", hight=6, length=12, n=25, d=True)
+
+r0 = women_df_D.iloc[:5, 0].tolist()
+r1 = women_df_D.iloc[:5, 1].tolist()
+r2 = women_df_D.iloc[5:30, 0].tolist()
+r3 = women_df_D.iloc[5:30, 1].tolist()
+r4 = women_df_D.iloc[30:155, 0].tolist()
+r5 = women_df_D.iloc[30:155, 1].tolist()
+
+bar_plot(r0, r1, "Females", patients_dir, "Single", d=True)
+bar_plot(r2, r3, "Females", patients_dir, "Double", hight=6, length=10, n=25, d=True)
+bar_plot(r4, r5, "Females", patients_dir, "Tripple", hight=6, length=12, n=25, d=True)
