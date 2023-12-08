@@ -10,6 +10,9 @@ from functions import read_file, statistics, windows_statistics, rr_intervals_ev
 
 os.chdir(os.path.dirname(os.path.dirname(script_path)))
 
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
 # Standard packages
 import numpy as np
 import pandas as pd
@@ -31,6 +34,7 @@ for file in files_list:
 
 # %% (A)
 
+print("A:")
 for file in files_list:
     file_name, file_extension = os.path.splitext(file)
 
@@ -44,11 +48,14 @@ for file in files_list:
     df_A = pd.DataFrame(data, columns=columns)
     df_A.to_csv(os.path.join(patients_dir, file_name, "results", "A.txt"), sep='\t', index=False)
 
-    plot(idx, RR, file_name, patients_dir, "Time Series")
-    hist(RR, file_name, patients_dir, "Histogram RR")
+    plot(idx, RR, file_name, patients_dir, "Time Series", "RR [ms]", "Indeks piku RR")
+    hist(RR, file_name, patients_dir, "Histogram RR", "RR [ms]", "Częstość")
+    
+    print("{} : ukończono".format(file_name))
 
 # %% (B)
 
+print("B:")
 for file in files_list:
     file_name, file_extension = os.path.splitext(file)
 
@@ -66,9 +73,12 @@ for file in files_list:
 
     stacked_plot(RR, file_name, patients_dir)
     stacked_hist(RR, file_name, patients_dir)
+    
+    print("{} : ukończono".format(file_name))
 
 # %% (C)
 
+print("C:")
 for file in files_list:
     file_name, file_extension = os.path.splitext(file)
 
@@ -84,8 +94,11 @@ for file in files_list:
     df_C = pd.DataFrame(np.array(results_C), columns=columns)
     df_C.to_csv(os.path.join(patients_dir, file_name, "results", "C.txt"), sep='\t', index=False)
 
+    print("{} : ukończono".format(file_name))    
+
 # %% (D)
 
+print("D:")
 for file in files_list:
     file_name, file_extension = os.path.splitext(file)
 
@@ -105,6 +118,8 @@ for file in files_list:
     bar_plot(results[0], results[1], file_name, patients_dir, "Single")
     bar_plot(results[2], results[3], file_name, patients_dir, "Double", hight=6, length=10, n=25)
     bar_plot(results[4], results[5], file_name, patients_dir, "Tripple", hight=6, length=12, n=25)
+    
+    print("{} : ukończono".format(file_name))
 
 # %%
 
@@ -120,6 +135,7 @@ for file in files_list:
         men.append(file_name)
 
 # %% Group (A)
+print("Statystyka grupowa A:")
 men_file_paths = [os.path.join(patients_dir, file, "results", "A.txt") for file in men]
 women_file_paths = [os.path.join(patients_dir, file, "results", "A.txt") for file in women]
 selected_columns = ['śr', 'var', 'min', 'max', 'ww', 'adf']
@@ -134,8 +150,10 @@ women_df_A.columns = women_df_A.columns.str.replace("adf", "% niestac")
 
 men_df_A.to_csv(os.path.join(patients_dir, "Group Statistics", "A_males.txt"), index=False, sep='\t')
 women_df_A.to_csv(os.path.join(patients_dir, "Group Statistics", "A_females.txt"), index=False, sep='\t')
+print("ukończono")
 
 # %% Group (B)
+print("Statystyka grupowa B:")
 men_file_paths = [os.path.join(patients_dir, file, "results", "B.txt") for file in men]
 women_file_paths = [os.path.join(patients_dir, file, "results", "B.txt") for file in women]
 selected_columns = ['k', 'śr', 'var', 'min', 'max', 'ww', 'adf']
@@ -150,8 +168,10 @@ women_df_B.columns = women_df_B.columns.str.replace("adf", "% niestac")
 
 men_df_B.to_csv(os.path.join(patients_dir, "Group Statistics", "B_males.txt"), index=False, sep='\t')
 women_df_B.to_csv(os.path.join(patients_dir, "Group Statistics", "B_females.txt"), index=False, sep='\t')
+print("ukończono")
 
 # %% Group (C)
+print("Statystyka grupowa C:")
 men_file_paths = [os.path.join(patients_dir, file, "results", "C.txt") for file in men]
 women_file_paths = [os.path.join(patients_dir, file, "results", "C.txt") for file in women]
 selected_columns = ['okno', 'śr', 'var', 'min', 'max', '% niezal', '% niestac']
@@ -161,9 +181,10 @@ women_df_C = merge_files(women_file_paths, selected_columns)
 
 men_df_C.to_csv(os.path.join(patients_dir, "Group Statistics", "C_males.txt"), index=False, sep='\t')
 women_df_C.to_csv(os.path.join(patients_dir, "Group Statistics", "C_females.txt"), index=False, sep='\t')
+print("ukończono")
 
 # %% Group (D)
-
+print("Statystyka grupowa D:")
 men_file_paths = [os.path.join(patients_dir, file, "results", "D.txt") for file in men]
 women_file_paths = [os.path.join(patients_dir, file, "results", "D.txt") for file in women]
 selected_columns = ['occurrences']
@@ -205,3 +226,4 @@ r5 = women_df_D.iloc[30:155, 1].tolist()
 bar_plot(r0, r1, "Females", patients_dir, "Single", d=True)
 bar_plot(r2, r3, "Females", patients_dir, "Double", hight=6, length=10, n=25, d=True)
 bar_plot(r4, r5, "Females", patients_dir, "Tripple", hight=6, length=12, n=25, d=True)
+print("ukończono")
